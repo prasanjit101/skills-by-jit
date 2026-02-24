@@ -22,6 +22,51 @@ Copy the `cursor-cloud-agents` directory to your skills folder:
 cp -r cursor-cloud-agents ~/.qwen/skills/
 ```
 
+## Authentication & Credentials Setup
+
+All API calls require a Cursor API key from your [Cursor Dashboard](https://cursor.com/settings).
+
+### Recommended: Save Your Key in a `.env` File
+
+The skill includes a built-in credential loader (`scripts/config.py`) that automatically reads a `.env` file from the skill root directory. This means you only set your key once and every script picks it up without any extra flags.
+
+**Step 1 — Create your `.env` file from the template:**
+
+```bash
+cp cursor-cloud-agents/.env.example cursor-cloud-agents/.env
+```
+
+**Step 2 — Add your real API key:**
+
+```
+# cursor-cloud-agents/.env
+CURSOR_API_KEY=your_actual_api_key_here
+```
+
+The `.env` file is listed in `.gitignore` and will **never be committed** to version control. The `.env.example` template file is committed instead, so collaborators know what to fill in.
+
+### Alternative: Shell Environment Variable
+
+```bash
+export CURSOR_API_KEY="your-api-key"
+```
+
+### Alternative: Pass Directly per Command
+
+```bash
+python scripts/launch_agent.py --api-key your-api-key ...
+```
+
+### Priority Order
+
+When a script runs, the API key is resolved in this order (highest wins):
+
+| Priority | Source |
+|----------|--------|
+| 1 (highest) | `--api-key` CLI flag |
+| 2 | `CURSOR_API_KEY` exported in shell |
+| 3 | `CURSOR_API_KEY` in `.env` file |
+
 ## Usage
 
 ### Trigger the Skill
@@ -36,11 +81,11 @@ Use natural language commands like:
 
 ### Using the Scripts
 
+All examples below assume your API key is already saved in `.env` (recommended). Add `--api-key YOUR_KEY` to any command if you prefer to pass it directly.
+
 #### Launch an Agent
 
 ```bash
-export CURSOR_API_KEY="your-api-key"
-
 python scripts/launch_agent.py \
   --repo https://github.com/your-org/your-repo \
   --prompt "Add a README.md file with installation instructions" \
@@ -90,7 +135,12 @@ python scripts/manage_agent.py --agent-id bc_abc123 --action delete
 ```
 cursor-cloud-agents/
 ├── SKILL.md                      # Main skill documentation
+├── README.md                     # This file
+├── .env.example                  # Credentials template (committed to git)
+├── .env                          # Your real credentials (gitignored, never committed)
+├── .gitignore                    # Ignores .env and other sensitive files
 ├── scripts/
+│   ├── config.py                 # Shared .env loader (auto-runs on import)
 │   ├── launch_agent.py           # Launch new agents
 │   ├── check_status.py           # Check status and conversation
 │   ├── list_agents.py            # List and filter agents
@@ -102,19 +152,14 @@ cursor-cloud-agents/
 └── assets/                       # (Optional assets)
 ```
 
-## Authentication
+### How `config.py` Works
 
-All API calls require a Cursor API key from your [Cursor Dashboard](https://cursor.com/settings).
+`scripts/config.py` is a zero-dependency `.env` loader that is **automatically imported** by every script in the `scripts/` directory. You do not need to call it manually.
 
-Set via environment variable:
-```bash
-export CURSOR_API_KEY="your-api-key"
-```
-
-Or pass directly:
-```bash
-python scripts/launch_agent.py --api-key your-api-key ...
-```
+- Locates `.env` in the skill root (one directory above `scripts/`)
+- Parses `KEY=VALUE` pairs, handling quotes and inline comments
+- Merges values into `os.environ` before argument parsing begins
+- **Does not override** values already set in your shell
 
 ## API Reference
 
@@ -135,20 +180,22 @@ See [references/webhooks.md](references/webhooks.md) for webhook configuration i
 
 ## Best Practices
 
-1. **Auto-select models**: Let Cursor pick the best model unless you have specific needs
-2. **Use webhooks**: Get notified when long-running agents complete
-3. **Descriptive branch names**: Use `feature/`, `fix/`, `docs/` prefixes
-4. **Verify webhooks**: Always verify webhook signatures
-5. **Handle rate limits**: Especially for `/v0/repositories` (1/min, 30/hour)
+1. **Store credentials in `.env`**: Never hardcode or commit your API key
+2. **Auto-select models**: Let Cursor pick the best model unless you have specific needs
+3. **Use webhooks**: Get notified when long-running agents complete
+4. **Descriptive branch names**: Use `feature/`, `fix/`, `docs/` prefixes
+5. **Verify webhooks**: Always verify webhook signatures
+6. **Handle rate limits**: Especially for `/v0/repositories` (1/min, 30/hour)
 
 ## Troubleshooting
 
 ### Common Issues
 
-- **401 Unauthorized**: Check API key is valid
+- **401 Unauthorized**: Check your `.env` has the correct key, or verify with `GET /v0/me`
 - **404 Not Found**: Verify agent ID exists
 - **429 Too Many Requests**: Implement exponential backoff
 - **Conversation not found**: Agent may have been deleted
+- **Key not picked up**: Make sure `.env` is in the `cursor-cloud-agents/` root (not inside `scripts/`)
 
 ### Get Help
 
@@ -156,6 +203,8 @@ See [references/webhooks.md](references/webhooks.md) for webhook configuration i
 python scripts/launch_agent.py --help
 python scripts/check_status.py --help
 python scripts/list_agents.py --help
+python scripts/followup.py --help
+python scripts/manage_agent.py --help
 ```
 
 ## License

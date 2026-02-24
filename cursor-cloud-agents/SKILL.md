@@ -9,10 +9,31 @@ This skill provides tools to programmatically launch and manage cloud agents tha
 
 ## Quick Start
 
-**Authentication:** All endpoints use Basic Auth with API key from [Cursor Dashboard](https://cursor.com/settings).
+**Authentication:** All endpoints use Basic Auth with your Cursor API key from the [Cursor Dashboard](https://cursor.com/settings).
+
+### 1. Save Your API Key (Recommended)
 
 ```bash
-# Launch an agent
+# Copy the template and fill in your real key
+cp .env.example .env
+# Edit .env and set: CURSOR_API_KEY=your_actual_api_key_here
+```
+
+The `.env` file is gitignored and will never be committed. Every script automatically loads it via `scripts/config.py` — no flags or exports required.
+
+### 2. Run a Script
+
+```bash
+# Launch an agent (key is loaded from .env automatically)
+python scripts/launch_agent.py \
+  --repo https://github.com/org/repo \
+  --prompt "Add a README.md file" \
+  --auto-create-pr
+```
+
+### Or use curl directly
+
+```bash
 curl --request POST \
   --url https://api.cursor.com/v0/agents \
   -u YOUR_API_KEY: \
@@ -28,6 +49,18 @@ curl --request GET \
   --url https://api.cursor.com/v0/agents/AGENT_ID \
   -u YOUR_API_KEY:
 ```
+
+## Credentials & Security
+
+| Method | How |
+|--------|-----|
+| `.env` file (recommended) | Add `CURSOR_API_KEY=...` to `cursor-cloud-agents/.env` |
+| Shell export | `export CURSOR_API_KEY="your-key"` |
+| Per-command flag | `--api-key YOUR_KEY` on any script |
+
+**Priority:** `--api-key` flag > shell environment variable > `.env` file
+
+`scripts/config.py` is a zero-dependency loader that auto-runs on `import config` (which every script does at startup). It reads `.env` from the skill root directory, parses it, and merges values into `os.environ` before argument parsing — so shell-level exports always take precedence over the file.
 
 ## Core Workflows
 
@@ -78,27 +111,29 @@ For webhook setup, payload verification, and examples, see **[references/webhook
 
 ## Best Practices
 
-1. **Model selection:** Use auto-select (omit `model` field)
-2. **Branch naming:** Use prefixes: `feature/`, `fix/`, `docs/`
-3. **Webhooks:** Configure for long-running agents; verify signatures
-4. **Rate limits:** `/v0/repositories` has strict limits (1/min, 30/hour)
-5. **Conversation access:** Retrieve before deleting (permanent loss)
+1. **Store credentials in `.env`**: Never hardcode or commit your API key
+2. **Model selection:** Use auto-select (omit `model` field)
+3. **Branch naming:** Use prefixes: `feature/`, `fix/`, `docs/`
+4. **Webhooks:** Configure for long-running agents; verify signatures
+5. **Rate limits:** `/v0/repositories` has strict limits (1/min, 30/hour)
+6. **Conversation access:** Retrieve before deleting (permanent loss)
 
 See **[references/api-reference.md](references/api-reference.md)** for detailed best practices.
 
 ## Scripts Usage
 
+All examples below assume your API key is saved in `.env`. 
+
 ```bash
 # Launch
 python scripts/launch_agent.py \
-  --api-key YOUR_KEY \
   --repo https://github.com/org/repo \
   --prompt "Add unit tests" \
   --auto-create-pr \
   --branch-name feature/tests
 
 # Check status
-python scripts/check_status.py --api-key YOUR_KEY --agent-id bc_abc123
+python scripts/check_status.py --agent-id bc_abc123
 
 # Get conversation
 python scripts/check_status.py --agent-id bc_abc123 --conversation
@@ -109,18 +144,41 @@ python scripts/list_agents.py --status RUNNING
 # Add follow-up
 python scripts/followup.py --agent-id bc_abc123 --prompt "Add docs"
 
-# Stop/Delete
+# Stop / Delete
 python scripts/manage_agent.py --agent-id bc_abc123 --action stop
 python scripts/manage_agent.py --agent-id bc_abc123 --action delete
+```
+
+## Files
+
+```
+cursor-cloud-agents/
+├── SKILL.md                      # This file
+├── README.md                     # Full usage guide
+├── .env.example                  # Credentials template (committed to git)
+├── .env                          # Your real credentials (gitignored, never committed)
+├── .gitignore                    # Ignores .env and other sensitive files
+├── scripts/
+│   ├── config.py                 # Shared .env loader (auto-runs on import)
+│   ├── launch_agent.py           # Launch new agents
+│   ├── check_status.py           # Check status and conversation
+│   ├── list_agents.py            # List and filter agents
+│   ├── followup.py               # Add follow-up instructions
+│   └── manage_agent.py           # Stop or delete agents
+├── references/
+│   ├── api-reference.md          # Complete API specification
+│   └── webhooks.md               # Webhook configuration guide
+└── assets/                       # (Optional assets)
 ```
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| 401 Unauthorized | Invalid API key - verify with `GET /v0/me` |
+| 401 Unauthorized | Check `.env` has the correct key; verify with `GET /v0/me` |
 | 404 Not Found | Agent doesn't exist or was deleted |
 | 429 Rate Limited | Implement exponential backoff |
+| Key not picked up | Ensure `.env` is in `cursor-cloud-agents/` root, not inside `scripts/` |
 | Conversation missing | Agent was deleted (irreversible) |
 | Follow-up fails | Agent must exist; stopped agents restart on follow-up |
 
